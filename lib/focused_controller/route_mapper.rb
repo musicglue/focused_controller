@@ -57,15 +57,19 @@ module FocusedController
     end
 
     class Mapping
-      def initialize_with_focused_controller(set, scope, path, options)
-        if scope[:focused_controller_routes]
-          options = FocusedController::RouteMapper.new(scope, options).options
-        end
-
-        initialize_without_focused_controller(set, scope, path, options)
+      def initialize_with_focused_controller(*args)
+        scope, options = args[FocusedController.scope_arg_index], args[-1]
+        args[-1] = focused_controller_options(scope, options) if scope[:focused_controller_routes]
+        initialize_without_focused_controller(*args)
       end
 
       alias_method_chain :initialize, :focused_controller
+
+      private
+
+      def focused_controller_options(scope, options)
+        FocusedController::RouteMapper.new(scope, options).options
+      end
     end
   end
 end
