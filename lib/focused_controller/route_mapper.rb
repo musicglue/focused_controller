@@ -62,7 +62,7 @@ module FocusedController
           action,
           new_options[:controller],
           options,
-          path,
+          _path,
           to,
           via,
           formatted,
