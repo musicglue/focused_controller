@@ -56,13 +56,18 @@ module FocusedController
     end
 
     def add_route(action, options)
+      options = FocusedController::RouteMapper.new(@scope, { action: action }.merge(options)).options
       if focused_controller_enabled?
         super(
           action,
-          FocusedController::RouteMapper.new(
-            @scope,
-            { action: action }.merge(options)
-          ).options
+          options[:controller],
+          options,
+          options[:path],
+          options[:to],
+          options[:via],
+          options[:formatted],
+          options[:anchor],
+          options[:options_constraints]
         )
       else
         super
