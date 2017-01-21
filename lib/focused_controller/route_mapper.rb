@@ -7,6 +7,7 @@ module FocusedController
   class RouteMapper
     def initialize(scope, options)
       @scope, @options = scope, options
+      @focused_controller_enabled = true
     end
 
     def options
@@ -45,17 +46,17 @@ module FocusedController
 
   module RoutingExtensions
     def focused_controller_routes(&block)
-      prev, @scope[:focused_controller_routes] = @scope[:focused_controller_routes], true
+      @focused_controller_enabled = true
       yield
     ensure
-      @scope[:focused_controller_routes] = false
+      @focused_controller_enabled = false
     end
 
     def focused_controller_enabled?
-      @scope[:focused_controller_routes]
+      @focused_controller_enabled
     end
 
-    def add_route(action, controller, options, _path, to, via, formatted, anchor, options_constriants)
+    def add_route(action, controller, options, _path, to, via, formatted, anchor, options_constraints)
       new_options = FocusedController::RouteMapper.new(@scope, { action: action }.merge(options)).options
       if focused_controller_enabled?
         super(
