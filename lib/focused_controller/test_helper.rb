@@ -11,14 +11,6 @@ module FocusedController
       _process_options(options)
       @_render_options = options
     end
-
-    def url_for(options = nil)
-      if options.is_a?(StubbedURL)
-        options
-      else
-        super
-      end
-    end
   end
 
   class TestRequest < ActionDispatch::TestRequest
@@ -37,35 +29,6 @@ module FocusedController
   end
 
   class TestResponse < ActionDispatch::TestResponse
-  end
-
-  class StubbedURL
-    attr_reader :helper_name, :args
-
-    def initialize(helper_name, args)
-      @helper_name = helper_name.to_s
-      @args        = args
-    end
-
-    def ==(other)
-      other.is_a?(self.class) &&
-        helper_name == other.helper_name &&
-        args        == other.args
-    end
-
-    # Deals with _compute_redirect_to_location in action_controller/metal/redirecting
-    # (I don't feel proud about this...)
-    def gsub(*)
-      self
-    end
-
-    def delete(*)
-      self
-    end
-
-    def to_s
-      "#{helper_name}(#{args.each(&:to_s).join(', ')})"
-    end
   end
 
   module TestHelper
@@ -87,12 +50,10 @@ module FocusedController
 
       def include_routes
         if controller_class.respond_to?(:_routes) && controller_class._routes
-          include controller_class._routes.named_routes.module
+          if mod = controller_class._routes.url_helpers
+            include mod
+          end
         end
-      end
-
-      def stub_url(*names)
-        setup { stub_url(*names) }
       end
     end
 
@@ -144,8 +105,12 @@ module FocusedController
       controller.url_for(*args)
     end
 
+    def _routes_included?
+      defined?(@_routes_included) && @_routes_included
+    end
+
     def respond_to?(*args)
-      unless defined?(@_routes_included) && @_routes_included
+      unless _routes_included?
         self.class.include_routes
         @_routes_included = true
       end
@@ -154,26 +119,10 @@ module FocusedController
     end
 
     def method_missing(method_name, *args, &block)
-      if respond_to?(method_name)
+      if !_routes_included? && respond_to?(method_name)
         send(method_name, *args, &block)
       else
         super
-      end
-    end
-
-    def stub_url(*names)
-      [self, controller].each do |host|
-        host.singleton_class.class_eval do
-          names.each do |name|
-            define_method("#{name}_url") do |*args|
-              StubbedURL.new("#{name}_url", args)
-            end
-
-            define_method("#{name}_path") do |*args|
-              StubbedURL.new("#{name}_path", args)
-            end
-          end
-        end
       end
     end
 

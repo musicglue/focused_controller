@@ -13,13 +13,10 @@ module FocusedController
       options = @options.dup
 
       if to = to_option
-        options[:to]         = FocusedController::Route.new(to)
-
-        # This causes rails to spit out a bit of extra useful information in the case
-        # of a routing error. The :action option is also necessary for the routing to
-        # work on Rails <= 3.1.
         options[:action]     = FocusedController.action_name
         options[:controller] = to.underscore
+
+        options.delete :to
       end
 
       options
@@ -28,7 +25,9 @@ module FocusedController
     private
 
     def to_option
-      if @options[:to] && !@options[:to].respond_to?(:call)
+      if @options[:controller]
+        @options[:controller]
+      elsif @options[:to] && !@options[:to].respond_to?(:call)
         if @options[:to].include?('#')
           stringify_controller_and_action(*@options[:to].split('#'))
         else
@@ -40,15 +39,11 @@ module FocusedController
     end
 
     def stringify_controller_and_action(controller, action)
-      name = ''
-      name << @scope[:module].camelize << '::' if @scope[:module]
-      name << controller.camelize << 'Controller::'
-      name << action.to_s.camelize
-      name
+      "#{controller.to_s.underscore}_controller/#{action.to_s.underscore}"
     end
   end
 
-  class ActionDispatch::Routing::Mapper
+  module RoutingExtensions
     def focused_controller_routes(&block)
       prev, @scope[:focused_controller_routes] = @scope[:focused_controller_routes], true
       yield
@@ -56,16 +51,47 @@ module FocusedController
       @scope[:focused_controller_routes] = false
     end
 
-    class Mapping
-      def initialize_with_focused_controller(set, scope, path, options)
-        if scope[:focused_controller_routes]
-          options = FocusedController::RouteMapper.new(scope, options).options
-        end
-
-        initialize_without_focused_controller(set, scope, path, options)
-      end
-
-      alias_method_chain :initialize, :focused_controller
+    def focused_controller_enabled?
+      @scope[:focused_controller_routes]
     end
+
+    def add_route(action, options)
+      if focused_controller_enabled?
+        super(
+          action,
+          FocusedController::RouteMapper.new(
+            @scope,
+            { action: action }.merge(options)
+          ).options
+        )
+      else
+        super
+      end
+    end
+  end
+
+  module RouteDispatcherExtensions
+    private
+
+    FOCUSED_CONTROLLER = "_controller/"
+
+    def controller_reference(controller_param)
+      if controller_param.include?(FOCUSED_CONTROLLER)
+        const_name = controller_param.camelize
+        ActiveSupport::Dependencies.constantize(const_name)
+      else
+        super
+      end
+    end
+  end
+end
+
+module ActionDispatch::Routing
+  class Mapper
+    include FocusedController::RoutingExtensions
+  end
+
+  class RouteSet::Dispatcher
+    prepend FocusedController::RouteDispatcherExtensions
   end
 end

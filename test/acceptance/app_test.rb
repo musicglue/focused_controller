@@ -1,4 +1,4 @@
-require 'helper'
+require_relative '../helper'
 require 'capybara'
 require 'capybara_minitest_spec'
 require 'capybara/poltergeist'
@@ -94,7 +94,7 @@ describe 'acceptance test' do
 
         yield
 
-        Process.kill('KILL', out.pid)
+        Process.kill('QUIT', File.read("tmp/pids/server.pid").to_i)
       end
     end
   end
@@ -103,7 +103,7 @@ describe 'acceptance test' do
     run_without_bundle_exec "bundle check >/dev/null || bundle update >/dev/null"
   end
 
-  let(:s) { Capybara::Session.new(:poltergeist, nil) }
+  let(:s) { Capybara::Session.new(:poltergeist) }
 
   it 'does basic CRUD actions successfully' do
     start_server do
@@ -144,19 +144,11 @@ describe 'acceptance test' do
     run_command "ruby -Itest test/unit/controllers/posts_controller_test.rb"
   end
 
-  it 'runs an isolated unit test' do
-    run_command "ruby -Itest test/unit/controllers/posts_controller_isolated_test.rb"
-  end
-
   it 'runs a functional spec' do
     run_command "rspec spec/controllers/posts_controller_spec.rb"
   end
 
   it 'runs a unit spec' do
     run_command "rspec spec/unit/controllers/posts_controller_spec.rb"
-  end
-
-  it 'runs an isolated unit spec' do
-    run_command "rspec spec/unit/controllers/posts_controller_isolated_spec.rb"
   end
 end

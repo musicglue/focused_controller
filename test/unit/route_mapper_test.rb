@@ -1,4 +1,4 @@
-require 'helper'
+require_relative '../helper'
 
 # RouteSet is missing some requires
 require 'active_support/core_ext/uri'
@@ -12,32 +12,34 @@ module FocusedController
       method = (environment[:method] || "GET").to_s.upcase
       env    = Rack::MockRequest.env_for(path, {:method => method})
       req    = route_set.request_class.new(env)
-
-      if route_set.respond_to?(:router)
-        router = route_set.router # Rails 3.2+
-      else
-        router = route_set.set    # Rails 3.0, 3.1
-      end
+      router = route_set.router
 
       router.recognize(req) do |route, matches, params|
         return route
       end
+
+      raise ArgumentError, "'#{path}' not recognized"
     end
 
     it 'creates routes that map to focused controllers' do
       route_set.draw do
         focused_controller_routes do
-          get 'posts'     => 'PostsController::Index'
-          get 'posts/all' => 'posts#index'
+          get 'posts'      => 'PostsController::Index'
+          get 'posts/all'  => 'posts#index'
+          get 'posts/all2' => 'PostsController::Index'
 
           resources :comments do
             resources :replies
+
+            get 'a/:foo' => 'PostsController::Index', on: :collection
+            get 'b/:foo', action: :index, on: :collection
           end
 
           resource :account
 
           namespace :admin do
             resources :comments
+            get 'foo' => 'FooController::Show'
           end
         end
       end
@@ -50,12 +52,15 @@ module FocusedController
         [:put, '/comments/4']         => 'CommentsController::Update',
         [:get, '/account']            => 'AccountsController::Show',
         [:get, '/comments/4/replies'] => 'RepliesController::Index',
-        [:get, '/admin/comments']     => 'Admin::CommentsController::Index'
+        [:get, '/admin/comments']     => 'Admin::CommentsController::Index',
+        [:get, '/comments/a/omg']     => 'PostsController::Index',
+        [:get, '/comments/b/omg']     => 'CommentsController::Index',
+        [:get, '/admin/foo']          => 'Admin::FooController::Show',
+        [:get, '/posts/all2']         => 'PostsController::Index',
       }
 
       mappings.each do |(method, path), controller|
         route = recognize(path, :method => method)
-        route.app.name.must_equal controller
         route.defaults[:action].must_equal FocusedController.action_name
         route.defaults[:controller].must_equal controller.underscore
       end
@@ -70,7 +75,13 @@ module FocusedController
           get 'posts' => app
         end
       end
-      recognize('/posts').app.must_equal app
+      route = recognize('/posts')
+      app   = route.app
+
+      # Remove this when we drop Rails 4.1
+      app = app.app if app.respond_to?(:app)
+
+      app.must_equal app
     end
 
     it "generates a route with url_for" do
